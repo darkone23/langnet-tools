@@ -1,9 +1,9 @@
 - [x] verify whitakers
 - [x] verify diogenes
-  - [ ] document classics data install
-- [ ] move langnet-cli sidecar into langnet-tools (perl zombie process reaper)
+  - [ ] document classics data install (to be done manually)
 - [ ] verify process-compose (diogenes + zombie reaper)
 - [ ] verify langnet-cli
 - [ ] make changes to langnet-cli to run as proper cli app
+  - [ ] diogenes reaper as subcommand in langnet-cli
 - [ ] basic langnet-web project setup
 - [ ] add langnet-web to process-compose

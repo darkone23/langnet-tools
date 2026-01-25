@@ -36,7 +36,7 @@ diogenes-server:
     just clone diogenes
     cd diogenes && devenv shell perl -- ./server/diogenes-server.pl
 
-langnet:
+langnet-cli:
     just clone langnet-cli
     cd langnet-cli && devenv shell poetry -- install
 
@@ -51,3 +51,7 @@ sidecar:
 compose *ARGS:
     envsubst < process-compose.tmpl.yaml > process-compose.yaml
     process-compose -p 38080 {{ ARGS }}
+
+# enter the core developer session
+devenv-zell:
+    devenv shell bash -- -c "zell"
