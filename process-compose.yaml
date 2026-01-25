@@ -1,0 +1,49 @@
+version: "0.5"
+
+environment:
+  - "GLOBAL_ENV_VAR=1"
+
+log_location: /home/langnet/process-compose.log
+log_level: debug
+
+processes:
+  diogenes:
+    command: "bash --login -c 'just -f /home/langnet/justfile diogenes'"
+    availability:
+      restart: "always"
+    environment:
+      - "PHI_DIR=/home/langnet/diogenes/Classics-Data/phi-latin"
+      - "TLG_DIR=/home/langnet/diogenes/Classics-Data/tlg_e"
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        scheme: http
+        path: "/"
+        port: 8888
+
+  langnet:
+    command: "just -f /home/langnet/justfile langnet"
+    availability:
+      restart: "always"
+    depends_on:
+      diogenes:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        scheme: http
+        path: "/"
+        port: 5050
+      initial_delay_seconds: 10
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+
+  zombie_reaper:
+    command: "just -f /home/langnet/justfile sidecar"
+    availability:
+      restart: "always"
+    depends_on:
+      langnet:
+        condition: process_healthy
