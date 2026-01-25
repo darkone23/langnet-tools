@@ -30,6 +30,10 @@ words +ARGS:
 
 diogenes:
     just clone diogenes
+    cd diogenes && devenv shell make
+
+diogenes-server:
+    just clone diogenes
     cd diogenes && devenv shell perl -- ./server/diogenes-server.pl
 
 langnet:
