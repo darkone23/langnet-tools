@@ -1,5 +1,5 @@
 # goal is to set up language platform
-# https://github.com/darkone23/langnet
+# https://github.com/darkone23/langnet-cli
 # 
 # https://github.com/darkone23/heritage
 #   https://github.com/darkone23/Heritage_Platform
@@ -11,65 +11,39 @@
 # 
 # https://github.com/darkone23/whitakers-words
 # 
+export LANGNET_TOOLS_DIR := shell("pwd")
+export LANGNET_TOOLS_HEADER := "🚧 DO NOT EDIT ME DIRECTLY I AM A TEMPLATED FILE 🚧"
 
 default:
     just compose --help
 
 clone project:
-    #!/usr/bin/env bash
+    @bash ./.justscripts/clone.sh "{{ project }}"
 
-    DIR=""
-    REPO=""
+whitakers:
+    just clone whitakers
+    cd whitakers-words && devenv shell make
 
-    if [ "{{ project }}" = "langnet" ]; then
-        DIR="langnet"
-        REPO="https://github.com/darkone23/langnet"
-    elif [ "{{ project }}" = "whitakers" ]; then 
-        DIR="whitakers-words"
-        REPO="https://github.com/darkone23/whitakers-words"
-    elif [ "{{ project }}" = "diogenes" ]; then 
-        DIR="diogenes"
-        REPO="https://github.com/darkone23/diogenes"
-    else
-        echo "Unexpected project: {{ project }}"
-        exit 1
-    fi
-
-    if [ ! -d "$DIR" ]; then
-        git clone "$REPO" "$DIR"
-    else
-        echo "$DIR already setup"
-        exit 0
-    fi
+words +ARGS:
+    @test -f ~/.local/bin/whitakers-words
+    @bash -c "~/.local/bin/whitakers-words {{ ARGS }}"
 
 diogenes:
-    #!/usr/bin/env bash
-    
-    # TODO: start this with process compose?
     just clone diogenes
-    cd diogenes && exec devenv shell perl -- ./server/diogenes-server.pl
+    cd diogenes && devenv shell perl -- ./server/diogenes-server.pl
 
 langnet:
-    #!/usr/bin/env bash
-    
-    # TODO: start this with process compose?
-    just clone langnet
-    cd langnet
-    devenv shell jsbuild
-    exec devenv shell poe -- dev
+    just clone langnet-cli
+    cd langnet-cli && devenv shell poetry -- install
 
 sidecar:
-    #!/usr/bin/env bash
-    
-    # TODO: start this with process compose?
-    # just clone langnet
-    cd langnet
-    # devenv shell jsbuild
-    exec devenv shell poe -- sidecar
+    just clone langnet-cli
+    cd langnet-cli && devenv shell poe -- sidecar
 
 # some examples:
 # just compose up -D
 # just compose attach
 # just compose list
 compose *ARGS:
+    envsubst < process-compose.tmpl.yaml > process-compose.yaml
     process-compose -p 38080 {{ ARGS }}

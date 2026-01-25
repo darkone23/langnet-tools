@@ -1,0 +1,5 @@
+- [x] verify whitakers
+- [ ] verify diogenes
+- [ ] verify langnet-cli
+- [ ] make changes to langnet-cli to run as proper cli app
+- [ ] move langnet-cli sidecar into langnet-tools (perl zombie process reaper)
