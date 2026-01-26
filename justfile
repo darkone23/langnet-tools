@@ -14,6 +14,9 @@
 export LANGNET_TOOLS_DIR := shell("pwd")
 export LANGNET_TOOLS_HEADER := "🚧 DO NOT EDIT ME DIRECTLY I AM A TEMPLATED FILE 🚧"
 
+export PHI_DIR := LANGNET_TOOLS_DIR / "Classics-Data/phi-latin"
+export TLG_DIR := LANGNET_TOOLS_DIR / "Classics-Data/tlg_e"
+
 default:
     just compose --help
 
@@ -31,18 +34,23 @@ words +ARGS:
 diogenes:
     just clone diogenes
     cd diogenes && devenv shell make
-
-diogenes-server:
-    just clone diogenes
-    cd diogenes && devenv shell perl -- ./server/diogenes-server.pl
+    cd diogenes && devenv shell make -- -f ./mk.prebuilt-data
 
 langnet-cli:
     just clone langnet-cli
     cd langnet-cli && devenv shell poetry -- install
 
-sidecar:
+diogenes-server:
+    just clone diogenes
+    cd diogenes && devenv shell perl -- ./server/diogenes-server.pl
+
+langnet-cli-server:
     just clone langnet-cli
-    cd langnet-cli && devenv shell poe -- sidecar
+    cd langnet-cli && devenv shell uvicorn-run
+    
+langnet-dg-reaper:
+    just clone langnet-cli
+    cd langnet-cli && devenv shell langnet-dg-reaper reap
 
 # some examples:
 # just compose up -D
@@ -50,7 +58,7 @@ sidecar:
 # just compose list
 compose *ARGS:
     envsubst < process-compose.tmpl.yaml > process-compose.yaml
-    process-compose -p 38080 {{ ARGS }}
+    process-compose -p 38080 -f ./process-compose.yaml {{ ARGS }}
 
 # enter the core developer session
 devenv-zell:

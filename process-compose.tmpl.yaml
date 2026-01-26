@@ -22,29 +22,29 @@ processes:
         path: "/"
         port: 8888
 
-  # langnet:
-  #   command: "just -f ${LANGNET_TOOLS_DIR}/justfile langnet"
-  #   availability:
-  #     restart: "always"
-  #   depends_on:
-  #     diogenes:
-  #       condition: process_healthy
-  #   readiness_probe:
-  #     http_get:
-  #       host: 127.0.0.1
-  #       scheme: http
-  #       path: "/"
-  #       port: 5050
-  #     initial_delay_seconds: 10
-  #     period_seconds: 10
-  #     timeout_seconds: 5
-  #     success_threshold: 1
-  #     failure_threshold: 3
-
-  zombie_reaper:
-    command: "just -f ${LANGNET_TOOLS_DIR}/justfile sidecar"
+  langnet_cli:
+    command: "just -f ${LANGNET_TOOLS_DIR}/justfile langnet-cli-server"
     availability:
       restart: "always"
     depends_on:
-      langnet:
+      diogenes:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        scheme: http
+        path: "/api/health"
+        port: 8000
+      initial_delay_seconds: 10
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+
+  zombie_reaper:
+    command: "just -f ${LANGNET_TOOLS_DIR}/justfile langnet-dg-reaper"
+    availability:
+      restart: "always"
+    depends_on:
+      langnet_cli:
         condition: process_healthy
