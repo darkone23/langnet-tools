@@ -26,6 +26,9 @@ processes:
     command: "just -f ${LANGNET_TOOLS_DIR}/justfile langnet-cli-server"
     availability:
       restart: "always"
+    environment:
+      - "LANGNET_LOG_LEVEL=INFO"
+      - "LANGNET_CACHE_ENABLED=true"
     depends_on:
       diogenes:
         condition: process_healthy
