@@ -13,6 +13,18 @@ elif [ "$PROJECT" = "whitakers" ]; then
 elif [ "$PROJECT" = "diogenes" ]; then 
     DIR="diogenes"
     REPO="git@github.com:darkone23/diogenes"
+elif [ "$PROJECT" = "sanskrit-heritage" ]; then 
+    DIR="sanskrit-heritage"
+    REPO="git@github.com:darkone23/sanskrit-heritage"
+elif [ "$PROJECT" = "heritage-platform" ]; then 
+    DIR="sanskrit-heritage/Heritage_Platform"
+    REPO="git@github.com:darkone23/Heritage_Platform"
+elif [ "$PROJECT" = "heritage-resources" ]; then 
+    DIR="sanskrit-heritage/Heritage_Resources"
+    REPO="git@github.com:darkone23/Heritage_Resources"
+elif [ "$PROJECT" = "zen" ]; then 
+    DIR="sanskrit-heritage/Zen"
+    REPO="git@github.com:darkone23/Zen"
 else
     echo "Unexpected project: $PROJECT"
     exit 1

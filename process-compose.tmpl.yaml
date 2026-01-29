@@ -51,3 +51,14 @@ processes:
     depends_on:
       langnet_cli:
         condition: process_healthy
+
+  sanskrit_heritage:
+    command: "cd ${LANGNET_TOOLS_DIR}/sanskrit-heritage && devenv shell heritage-cgi"
+    availability:
+      restart: "always"
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        scheme: http
+        path: "/"
+        port: 48080
