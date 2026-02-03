@@ -54,6 +54,8 @@ processes:
 
   sanskrit_heritage:
     command: "cd ${LANGNET_TOOLS_DIR}/sanskrit-heritage && devenv shell heritage-cgi"
+    shutdown:
+      command: "pkill httpd"
     availability:
       restart: "always"
     readiness_probe:

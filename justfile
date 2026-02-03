@@ -17,8 +17,8 @@
 export LANGNET_TOOLS_DIR := shell("pwd")
 export LANGNET_TOOLS_HEADER := "🚧 DO NOT EDIT ME DIRECTLY I AM A TEMPLATED FILE 🚧"
 
-export PHI_DIR := LANGNET_TOOLS_DIR / "Classics-Data/phi-latin"
-export TLG_DIR := LANGNET_TOOLS_DIR / "Classics-Data/tlg_e"
+export PHI_DIR := LANGNET_TOOLS_DIR / "diogenes/Classics-Data/phi-latin"
+export TLG_DIR := LANGNET_TOOLS_DIR / "diogenes/Classics-Data/tlg_e"
 
 default:
     just compose --help
