@@ -32,17 +32,19 @@ processes:
     depends_on:
       diogenes:
         condition: process_healthy
+      sanskrit_heritage:
+        condition: process_healthy
     readiness_probe:
+      initial_delay_seconds: 20
+      timeout_seconds: 5
+      failure_threshold: 5
       http_get:
         host: 127.0.0.1
         scheme: http
         path: "/api/health"
         port: 8000
-      initial_delay_seconds: 10
       period_seconds: 10
-      timeout_seconds: 5
       success_threshold: 1
-      failure_threshold: 3
 
   zombie_reaper:
     command: "just -f ${LANGNET_TOOLS_DIR}/justfile langnet-dg-reaper"
