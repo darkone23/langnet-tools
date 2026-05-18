@@ -16,6 +16,4 @@ process-compose.yaml
 sanskrit-heritage/
 diogenes/
 whitakers-words/
-langnet-cli/
-langnet-spec/
-langnet-web/
+langnet-*/

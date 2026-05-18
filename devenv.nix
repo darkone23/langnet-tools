@@ -28,6 +28,7 @@ in {
     # pkgs.ansible
 
     pkgs.opencode
+    pkgs.socat
     # pkgs.envsubst
     
     # pkgs.docker

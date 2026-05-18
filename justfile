@@ -60,7 +60,7 @@ langnet-cli-server:
     
 langnet-dg-reaper:
     just clone langnet-cli
-    cd langnet-cli && devenv shell langnet-dg-reaper reap
+    cd langnet-cli && devenv shell just -- langnet-dg-reaper
 
 # some examples:
 # just compose up -D
@@ -73,3 +73,7 @@ compose *ARGS:
 # enter the core developer session
 devenv-zell:
     devenv shell bash -- -c "zell"
+
+# socat for port forwarding
+forward from to:
+    socat TCP-LISTEN:{{to}},fork,bind=0.0.0.0 TCP:127.0.0.1:{{from}}

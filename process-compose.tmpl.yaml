@@ -22,37 +22,37 @@ processes:
         path: "/"
         port: 8888
 
-  langnet_cli:
-    command: "just -f ${LANGNET_TOOLS_DIR}/justfile langnet-cli-server"
-    availability:
-      restart: "always"
-    environment:
-      - "LANGNET_LOG_LEVEL=INFO"
-      - "LANGNET_CACHE_ENABLED=true"
-    depends_on:
-      diogenes:
-        condition: process_healthy
-      sanskrit_heritage:
-        condition: process_healthy
-    readiness_probe:
-      initial_delay_seconds: 20
-      timeout_seconds: 5
-      failure_threshold: 5
-      http_get:
-        host: 127.0.0.1
-        scheme: http
-        path: "/api/health"
-        port: 8000
-      period_seconds: 10
-      success_threshold: 1
+  # langnet_cli:
+  #   command: "just -f ${LANGNET_TOOLS_DIR}/justfile langnet-cli-server"
+  #   availability:
+  #     restart: "always"
+  #   environment:
+  #     - "LANGNET_LOG_LEVEL=INFO"
+  #     - "LANGNET_CACHE_ENABLED=true"
+  #   depends_on:
+  #     diogenes:
+  #       condition: process_healthy
+  #     sanskrit_heritage:
+  #       condition: process_healthy
+  #   readiness_probe:
+  #     initial_delay_seconds: 20
+  #     timeout_seconds: 5
+  #     failure_threshold: 5
+  #     http_get:
+  #       host: 127.0.0.1
+  #       scheme: http
+  #       path: "/api/health"
+  #       port: 8000
+  #     period_seconds: 10
+  #     success_threshold: 1
 
   zombie_reaper:
     command: "just -f ${LANGNET_TOOLS_DIR}/justfile langnet-dg-reaper"
     availability:
       restart: "always"
-    depends_on:
-      langnet_cli:
-        condition: process_healthy
+    # depends_on:
+    #   langnet_cli:
+    #     condition: process_healthy
 
   sanskrit_heritage:
     command: "cd ${LANGNET_TOOLS_DIR}/sanskrit-heritage && devenv shell heritage-cgi"
