@@ -1,4 +1,4 @@
-warning: "${LANGNET_TOOLS_HEADER}"
+# ${LANGNET_TOOLS_HEADER}
 version: "0.5"
 
 environment:
@@ -53,6 +53,31 @@ processes:
     # depends_on:
     #   langnet_cli:
     #     condition: process_healthy
+
+  langnet_web:
+    command: "cd ${LANGNET_TOOLS_DIR}/langnet-cli && devenv shell -- bash -c 'cd webapp && just preview-logs'"
+    availability:
+      restart: "always"
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        scheme: http
+        path: "/"
+        port: 43210
+
+  langnet_web_caddy:
+    command: "cd ${LANGNET_TOOLS_DIR}/langnet-cli && devenv shell -- bash -c 'cd webapp && sudo -n just caddy-proxy'"
+    availability:
+      restart: "always"
+    depends_on:
+      langnet_web:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        scheme: http
+        path: "/"
+        port: 80
 
   sanskrit_heritage:
     command: "cd ${LANGNET_TOOLS_DIR}/sanskrit-heritage && devenv shell heritage-cgi"
