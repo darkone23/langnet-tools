@@ -48,5 +48,19 @@ jobs:
             "cd ~/langnet-tools && just deploy '${GITHUB_SHA}'"
 
       - name: Smoke — public health through Caddy
+        # Retry: the deploy step restarts the whole service graph, including
+        # orion's caddy-proxy; the public gateway returns 521 for the ~1-3s
+        # window while caddy rebinds after compose-restart (observed on the
+        # first real run, 2026-09-13: loopback health green, public smoke
+        # 521 seconds later, 200 shortly after). 5 attempts x 8s covers it.
         run: |
-          curl -fsS --max-time 15 https://project-orion.net/api/health
+          ok=0
+          for i in 1 2 3 4 5; do
+            if curl -fsS --max-time 15 https://project-orion.net/api/health; then
+              ok=1
+              break
+            fi
+            echo "smoke attempt $i failed; retrying in 8s"
+            sleep 8
+          done
+          [ "$ok" = 1 ] || { echo "::error::public /api/health never came up through Caddy"; exit 1; }
