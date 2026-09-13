@@ -125,24 +125,35 @@ deploy sha:
     fi
     git checkout -f -B main "{{ sha }}"
     # --- component sync: ff to the head of each tracked branch ---
-    # devenv.lock is excluded from the drift guard (prod-local env pin; if
-    # origin moved it too, the ff merge aborts and deploy fails visibly
-    # rather than silently reverting the env pin).
+    # The merge itself is the arbiter (no pre-guard: a no-op ff must succeed
+    # even when a clone carries prod-local files, e.g. sanskrit-heritage's
+    # httpd.conf — git only aborts when the update would CLOBBER local
+    # changes). devenv.lock is volatile on prod (devenv regenerates it on
+    # eval), so when a moving ff conflicts on the lock, discard ours — the
+    # repo pin wins — and retry once, loudly. Any other clobber-conflict is
+    # real drift: refuse with the clone's status.
     for comp in langnet-cli diogenes sanskrit-heritage; do
         if [ ! -d "{{LANGNET_TOOLS_DIR}}/$comp/.git" ]; then
             echo "REFUSING: $comp clone missing — run 'just clone $comp' on orion first" >&2
             exit 1
         fi
-        branch=$(git -C "{{LANGNET_TOOLS_DIR}}/$comp" rev-parse --abbrev-ref HEAD)
-        git -C "{{LANGNET_TOOLS_DIR}}/$comp" fetch origin "$branch"
-        if ! git -C "{{LANGNET_TOOLS_DIR}}/$comp" diff --quiet -- ':(exclude)devenv.lock'; then
-            echo "REFUSING: $comp has uncommitted drift (beyond devenv.lock):" >&2
-            git -C "{{LANGNET_TOOLS_DIR}}/$comp" status --short >&2
-            exit 1
+        d="{{LANGNET_TOOLS_DIR}}/$comp"
+        branch=$(git -C "$d" rev-parse --abbrev-ref HEAD)
+        git -C "$d" fetch origin "$branch"
+        if ! git -C "$d" merge --ff-only "origin/$branch" 2>/tmp/ff-err.$comp; then
+            if ! git -C "$d" diff --quiet -- ':(exclude)devenv.lock'; then
+                echo "REFUSING: $comp has real prod drift (beyond the volatile devenv.lock):" >&2
+                cat /tmp/ff-err.$comp >&2
+                git -C "$d" status --short >&2
+                echo "Capture the drift to $branch via PR, then re-deploy." >&2
+                exit 1
+            fi
+            echo "component $comp: discarding volatile devenv.lock (devenv regenerates it; repo pin wins)" >&2
+            git -C "$d" checkout -- devenv.lock
+            git -C "$d" merge --ff-only "origin/$branch" \
+                || { echo "REFUSING: $comp cannot fast-forward to origin/$branch even after discarding the volatile lock (diverged?)" >&2; exit 1; }
         fi
-        git -C "{{LANGNET_TOOLS_DIR}}/$comp" merge --ff-only "origin/$branch" \
-            || { echo "REFUSING: $comp cannot fast-forward to origin/$branch (diverged, or origin moved devenv.lock over a local edit)" >&2; exit 1; }
-        echo "component $comp -> $(git -C "{{LANGNET_TOOLS_DIR}}/$comp" rev-parse --short HEAD) ($branch)"
+        echo "component $comp -> $(git -C "$d" rev-parse --short HEAD) ($branch)"
     done
     just compose-restart
     curl -fsS --max-time 10 http://127.0.0.1:43210/api/health >/dev/null
