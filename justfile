@@ -94,6 +94,15 @@ compose-restart:
 # workflow (edge runner -> tailscale ssh) on every merge to main; also usable
 # by hand on orion: `just deploy <sha>`.
 #
+# Component sync (v1 semantics): the service-bearing clones (langnet-cli,
+# diogenes, sanskrit-heritage) are fast-forwarded to the head of the branch
+# each already tracks — this is what carries component PRs (langnet-cli,
+# whitakers-words, diogenes, ...) to prod. Declared revisions come later with
+# the orion-services IaC role. whitakers-words is deliberately NOT synced: no
+# running service reads its clone (prod runs the built binary at
+# ~/.local/bin/whitakers-words); its deploys stay manual (`just whitakers`
+# build+install on orion).
+#
 # ROLLBACK: re-run the same recipe at the previous revision, e.g.:
 #     just deploy 43d5f81
 deploy sha:
@@ -110,6 +119,26 @@ deploy sha:
         exit 1
     fi
     git checkout -f -B main "{{ sha }}"
+    # --- component sync: ff to the head of each tracked branch ---
+    # devenv.lock is excluded from the drift guard (prod-local env pin; if
+    # origin moved it too, the ff merge aborts and deploy fails visibly
+    # rather than silently reverting the env pin).
+    for comp in langnet-cli diogenes sanskrit-heritage; do
+        if [ ! -d "{{LANGNET_TOOLS_DIR}}/$comp/.git" ]; then
+            echo "REFUSING: $comp clone missing — run 'just clone $comp' on orion first" >&2
+            exit 1
+        fi
+        branch=$(git -C "{{LANGNET_TOOLS_DIR}}/$comp" rev-parse --abbrev-ref HEAD)
+        git -C "{{LANGNET_TOOLS_DIR}}/$comp" fetch origin "$branch"
+        if ! git -C "{{LANGNET_TOOLS_DIR}}/$comp" diff --quiet -- ':(exclude)devenv.lock'; then
+            echo "REFUSING: $comp has uncommitted drift (beyond devenv.lock):" >&2
+            git -C "{{LANGNET_TOOLS_DIR}}/$comp" status --short >&2
+            exit 1
+        fi
+        git -C "{{LANGNET_TOOLS_DIR}}/$comp" merge --ff-only "origin/$branch" \
+            || { echo "REFUSING: $comp cannot fast-forward to origin/$branch (diverged, or origin moved devenv.lock over a local edit)" >&2; exit 1; }
+        echo "component $comp -> $(git -C "{{LANGNET_TOOLS_DIR}}/$comp" rev-parse --short HEAD) ($branch)"
+    done
     just compose-restart
     curl -fsS --max-time 10 http://127.0.0.1:43210/api/health >/dev/null
     echo "deploy ok: {{ sha }} (HEAD now $(git rev-parse --short HEAD))"
