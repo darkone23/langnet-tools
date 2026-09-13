@@ -1,0 +1,52 @@
+name: deploy
+
+# langnet prod deploy (HOL-134, plan rev 3 Phase 3): merge to main = deploy.
+# Runs on the dedicated self-hosted runner on hetzner-edge, registered to this
+# repo (same boundary-first pattern as the chipnet sync-apply runner: the
+# runner lives inside the tailnet, no ephemeral cloud worker ever joins).
+#
+# The runner reaches orion ONLY over tailscale ssh (identity-based, no key
+# material; Tailscale ACL + ssh rule gate paperclip+edge -> orion:22, nothing
+# broader — scope verified before the first run).
+#
+# Deploy steps live in the repo justfile (`just deploy <sha>`) so this
+# workflow stays thin. ROLLBACK: re-run `just deploy <previous-sha>` on orion
+# — same recipe, previous revision.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, langnet-edge]
+    timeout-minutes: 15
+    steps:
+      - name: Refuse runs that are not on main
+        # workflow_dispatch can be sent from any ref; a diverged workspace must
+        # never deploy. Push runs are always main (trigger filter).
+        run: |
+          echo "deploy: event=${GITHUB_EVENT_NAME} ref=${GITHUB_REF_NAME} sha=${GITHUB_SHA}"
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            exit 0
+          fi
+          echo "::error::deploy runs only from main — push to main, or workflow_dispatch targeting main (got ref '${GITHUB_REF_NAME}')"
+          exit 1
+
+      - name: Preflight — prove the deploy channel (tailscale ssh to orion)
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=10 langnet@orion.elf-lizard.ts.net 'echo deploy-channel-ok'
+
+      - name: Deploy the merged revision (justfile recipe on orion)
+        run: |
+          ssh -o BatchMode=yes langnet@orion.elf-lizard.ts.net \
+            "cd ~/langnet-tools && just deploy '${GITHUB_SHA}'"
+
+      - name: Smoke — public health through Caddy
+        run: |
+          curl -fsS --max-time 15 https://project-orion.net/api/health
