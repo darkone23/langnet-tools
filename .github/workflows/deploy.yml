@@ -39,8 +39,20 @@ jobs:
           exit 1
 
       - name: Preflight — prove the deploy channel (tailscale ssh to orion)
+        # Retry window (board direction, 2026-09-13): a cold tailscaled on
+        # either end can make the first attempt time out; 3 attempts x 5s
+        # keeps it fail-fast but immune to a slow path setup.
         run: |
-          ssh -o BatchMode=yes -o ConnectTimeout=10 langnet@orion.elf-lizard.ts.net 'echo deploy-channel-ok'
+          ok=0
+          for i in 1 2 3; do
+            if ssh -o BatchMode=yes -o ConnectTimeout=10 langnet@orion.elf-lizard.ts.net 'echo deploy-channel-ok'; then
+              ok=1
+              break
+            fi
+            echo "preflight attempt $i failed; retrying in 5s"
+            sleep 5
+          done
+          [ "$ok" = 1 ] || { echo "::error::tailscale ssh channel to orion never came up"; exit 1; }
 
       - name: Deploy the merged revision (justfile recipe on orion)
         run: |
@@ -48,5 +60,22 @@ jobs:
             "cd ~/langnet-tools && just deploy '${GITHUB_SHA}'"
 
       - name: Smoke — public health through Caddy
+        # Retry window per board direction (2026-09-13): retry for up to 60s
+        # at a 2s interval, so the public smoke never races Caddy's bind after
+        # compose-restart (first real run: loopback health green, public smoke
+        # HTTP 521 one second later, 200 confirmed minutes later — the deploy
+        # restarts orion's langnet_web_caddy with the graph).
         run: |
-          curl -fsS --max-time 15 https://project-orion.net/api/health
+          ok=0
+          deadline=$(( $(date +%s) + 60 ))
+          attempt=0
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            attempt=$(( attempt + 1 ))
+            if curl -fsS --max-time 15 https://project-orion.net/api/health; then
+              ok=1
+              break
+            fi
+            echo "smoke attempt $attempt failed; retrying in 2s (60s window)"
+            sleep 2
+          done
+          [ "$ok" = 1 ] || { echo "::error::public /api/health never came up through Caddy (60s window exhausted)"; exit 1; }
