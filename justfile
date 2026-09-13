@@ -70,6 +70,50 @@ compose *ARGS:
     envsubst < process-compose.tmpl.yaml > process-compose.yaml
     process-compose -p 38080 -f ./process-compose.yaml {{ ARGS }}
 
+# Restart the full service graph: stop the running daemon (best-effort),
+# re-render the config, start detached, wait for the webapp health endpoint.
+# Used by `just deploy`; also safe standalone.
+compose-restart:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    process-compose -p 38080 down >/dev/null 2>&1 || true
+    for _ in $(seq 1 30); do
+        pgrep -f "process-compose -p 38080" >/dev/null 2>&1 || break
+        sleep 0.5
+    done
+    envsubst < process-compose.tmpl.yaml > process-compose.yaml
+    process-compose -p 38080 -f ./process-compose.yaml up -D
+    for _ in $(seq 1 45); do
+        curl -fsS --max-time 3 http://127.0.0.1:43210/api/health >/dev/null 2>&1 && exit 0
+        sleep 2
+    done
+    echo "webapp /api/health did not come up after restart" >&2
+    exit 1
+
+# Deploy prod to a revision (pipeline v1 — HOL-134). Called by the deploy
+# workflow (edge runner -> tailscale ssh) on every merge to main; also usable
+# by hand on orion: `just deploy <sha>`.
+#
+# ROLLBACK: re-run the same recipe at the previous revision, e.g.:
+#     just deploy 43d5f81
+deploy sha:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    git fetch origin "{{ sha }}"
+    # Drift guard: a forced checkout would silently revert uncommitted prod
+    # changes (real drift was seen 2026-09-12: logrotate + rate-limit env).
+    # Refuse unless the worktree exactly matches the target revision.
+    if ! git diff --quiet "{{ sha }}"; then
+        echo "REFUSING: prod tree differs from {{ sha }} (uncommitted drift):" >&2
+        git diff --stat "{{ sha }}" | head -20 >&2
+        echo "Land the drift to main via PR first, then re-deploy." >&2
+        exit 1
+    fi
+    git checkout -f -B main "{{ sha }}"
+    just compose-restart
+    curl -fsS --max-time 10 http://127.0.0.1:43210/api/health >/dev/null
+    echo "deploy ok: {{ sha }} (HEAD now $(git rev-parse --short HEAD))"
+
 logrotate-dry-run:
     mkdir -p tmp
     nix shell nixpkgs#logrotate -c logrotate -d -s {{LANGNET_TOOLS_DIR}}/tmp/process-compose-logrotate.status {{LANGNET_TOOLS_DIR}}/process-compose.logrotate
