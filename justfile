@@ -109,12 +109,17 @@ deploy sha:
     #!/usr/bin/env bash
     set -euo pipefail
     git fetch origin "{{ sha }}"
-    # Drift guard: a forced checkout would silently revert uncommitted prod
-    # changes (real drift was seen 2026-09-12: logrotate + rate-limit env).
-    # Refuse unless the worktree exactly matches the target revision.
-    if ! git diff --quiet "{{ sha }}"; then
-        echo "REFUSING: prod tree differs from {{ sha }} (uncommitted drift):" >&2
-        git diff --stat "{{ sha }}" | head -20 >&2
+    # Drift guard (uncommitted-drift-only, board-corrected semantics):
+    # refuse when the worktree or index carries uncommitted changes vs HEAD —
+    # a forced checkout would silently revert those (real drift was seen
+    # 2026-09-12: logrotate + rate-limit env). Version skew between HEAD and
+    # the target revision is exactly what a deploy reconciles, so being
+    # behind/ahead of the target is NOT drift. Comparing against the target
+    # here would refuse every real deploy (and rollback) — the first three
+    # runs only passed because the tree had been hand-placed at the target.
+    if ! git diff --quiet HEAD -- . || ! git diff --cached --quiet; then
+        echo "REFUSING: uncommitted prod drift (worktree/index vs HEAD):" >&2
+        git status --short >&2
         echo "Land the drift to main via PR first, then re-deploy." >&2
         exit 1
     fi
