@@ -1,0 +1,11 @@
+/home/langnet/langnet-tools/process-compose.log {
+	size 25M
+	rotate 5
+	compress
+	missingok
+	notifempty
+	copytruncate
+	delaycompress
+	create 0644 langnet langnet
+}
+

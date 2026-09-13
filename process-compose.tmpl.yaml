@@ -3,9 +3,15 @@ version: "0.5"
 
 environment:
   - "GLOBAL_ENV_VAR=1"
+  - "LANGNET_RATE_LIMIT_MODE=observe"
+  - "LANGNET_ANON_SESSION_COOKIE=ln_anon"
 
 log_location: ${LANGNET_TOOLS_DIR}/process-compose.log
 log_level: debug
+
+# Log rotation for process-compose output is managed by the logrotate_process_compose
+# helper below. It uses ../process-compose.logrotate via nix-shell and stores
+# logrotate state under ../tmp/.
 
 processes:
   diogenes:
@@ -54,6 +60,13 @@ processes:
     #   langnet_cli:
     #     condition: process_healthy
 
+  logrotate_process_compose:
+    command: "just -f ${LANGNET_TOOLS_DIR}/justfile logrotate-loop"
+    availability:
+      restart: "always"
+    environment:
+      - "LANGNET_LOGROTATE_INTERVAL_SECONDS=3600"
+
   langnet_web:
     command: "cd ${LANGNET_TOOLS_DIR}/langnet-cli && devenv shell -- bash -c 'cd webapp && just preview-logs'"
     availability:
@@ -62,7 +75,7 @@ processes:
       http_get:
         host: 127.0.0.1
         scheme: http
-        path: "/"
+        path: "/api/health"
         port: 43210
 
   langnet_web_caddy:
@@ -76,7 +89,7 @@ processes:
       http_get:
         host: 127.0.0.1
         scheme: http
-        path: "/"
+        path: "/api/health"
         port: 80
 
   sanskrit_heritage:

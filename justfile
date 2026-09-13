@@ -70,6 +70,18 @@ compose *ARGS:
     envsubst < process-compose.tmpl.yaml > process-compose.yaml
     process-compose -p 38080 -f ./process-compose.yaml {{ ARGS }}
 
+logrotate-dry-run:
+    mkdir -p tmp
+    nix shell nixpkgs#logrotate -c logrotate -d -s {{LANGNET_TOOLS_DIR}}/tmp/process-compose-logrotate.status {{LANGNET_TOOLS_DIR}}/process-compose.logrotate
+
+logrotate-run:
+    mkdir -p tmp
+    nix shell nixpkgs#logrotate -c logrotate -s {{LANGNET_TOOLS_DIR}}/tmp/process-compose-logrotate.status {{LANGNET_TOOLS_DIR}}/process-compose.logrotate
+
+logrotate-loop:
+    mkdir -p tmp
+    bash -c 'while true; do just -f {{LANGNET_TOOLS_DIR}}/justfile logrotate-run; sleep "${LANGNET_LOGROTATE_INTERVAL_SECONDS:-3600}"; done'
+
 # enter the core developer session
 devenv-zell:
     devenv shell bash -- -c "zell"
