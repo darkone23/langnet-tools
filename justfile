@@ -70,12 +70,40 @@ compose *ARGS:
     envsubst < process-compose.tmpl.yaml > process-compose.yaml
     process-compose -p 38080 -f ./process-compose.yaml {{ ARGS }}
 
-# Restart the full service graph: stop the running daemon (best-effort),
-# re-render the config, start detached, wait for the webapp health endpoint.
+# Restart the full service graph: re-render the config, restart through
+# whatever supervisor owns the daemon, wait for the webapp health endpoint.
 # Used by `just deploy`; also safe standalone.
+#
+# Supervisor routing (HOL-147): when orion-services has installed the
+# boot-persistence unit (systemctl --user cat langnet-compose.service),
+# restarts go through systemd so supervision is continuous — a bare `up -D`
+# here would start a detached daemon the unit doesn't own and fight it on
+# the next boot/restart (the unit's ExecStart would hit the busy port).
+# On a pre-unit box the v1 detached path below runs unchanged.
 compose-restart:
     #!/usr/bin/env bash
     set -euo pipefail
+    # ssh/ansible sessions don't always carry the user bus env (the fleet
+    # justfile's pc_prelude exports this for the same reason)
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    if systemctl --user cat langnet-compose.service >/dev/null 2>&1; then
+        envsubst < process-compose.tmpl.yaml > process-compose.yaml
+        if systemctl --user is-active --quiet langnet-compose.service; then
+            systemctl --user restart langnet-compose.service
+        else
+            # unit installed but inactive (booted but never started, or a
+            # hand `stop`): clear any legacy detached daemon holding the
+            # port, then start under systemd
+            process-compose -p 38080 down >/dev/null 2>&1 || true
+            systemctl --user start langnet-compose.service
+        fi
+        for _ in $(seq 1 45); do
+            curl -fsS --max-time 3 http://127.0.0.1:43210/api/health >/dev/null 2>&1 && exit 0
+            sleep 2
+        done
+        echo "webapp /api/health did not come up after systemd restart" >&2
+        exit 1
+    fi
     process-compose -p 38080 down >/dev/null 2>&1 || true
     for _ in $(seq 1 30); do
         pgrep -f "process-compose -p 38080" >/dev/null 2>&1 || break
