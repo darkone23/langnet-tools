@@ -54,7 +54,7 @@ whitakers-install:
         echo "$out" >&2
         exit 1
     fi
-    echo "whitakers-install ok: 'lupus' -> 'wolf; grappling iron'"
+    echo "whitakers-install ok: 'lupus' -> 'wolf; grappling iron' (built revision: $(git -C "$LANGNET_TOOLS_DIR/whitakers-words" rev-parse --short HEAD))"
 
 diogenes:
     just clone diogenes
