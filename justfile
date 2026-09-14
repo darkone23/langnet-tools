@@ -34,6 +34,28 @@ words +ARGS:
     @test -f ~/.local/bin/whitakers-words
     @bash -c "~/.local/bin/whitakers-words {{ ARGS }}"
 
+# Build + install the prod whitakers-words binary (HOL-148). The binary's
+# data dir is compiled in as "." (CWD-relative), so the wrapper cd's into the
+# clone before exec. That wrapper is the contract: langnet-cli's
+# WhitakersClient and the `words` recipe both resolve
+# ~/.local/bin/whitakers-words. Idempotent: clone no-ops when present, make
+# is incremental, install overwrites, smoke gates on a real lookup.
+whitakers-install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just whitakers
+    mkdir -p ~/.local/bin
+    printf '#!/usr/bin/env sh\ncd %s\nexec ./bin/words "$@"\n' \
+      "$LANGNET_TOOLS_DIR/whitakers-words" > ~/.local/bin/whitakers-words
+    chmod +x ~/.local/bin/whitakers-words
+    out="$(echo lupus | ~/.local/bin/whitakers-words 2>/dev/null || true)"
+    if ! echo "$out" | grep -q "wolf"; then
+        echo "whitakers smoke lookup FAILED (~/.local/bin/whitakers-words did not resolve 'lupus'):" >&2
+        echo "$out" >&2
+        exit 1
+    fi
+    echo "whitakers-install ok: 'lupus' -> 'wolf; grappling iron' (built revision: $(git -C "$LANGNET_TOOLS_DIR/whitakers-words" rev-parse --short HEAD))"
+
 diogenes:
     just clone diogenes
     cd diogenes && devenv shell make
