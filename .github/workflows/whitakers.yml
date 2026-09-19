@@ -1,0 +1,51 @@
+name: whitakers
+
+# HOL-148: ensure the prod whitakers-words binary exists on orion. Same
+# transport as deploy (edge runner -> tailscale ssh, identity-based) and the
+# same boundary: the runner reaches orion ONLY over that ssh.
+#
+# Idempotent by construction: `just whitakers-install` no-ops the clone,
+# rebuilds incrementally (make), installs the ~/.local/bin/whitakers-words
+# wrapper, and gates on a real lookup (smoke: 'lupus' -> 'wolf'). A converged
+# run is a fast no-op + re-verify.
+#
+# whitakers stays deliberately UNSYNCED by `just deploy` (see the deploy
+# comment in the justfile): this workflow ensures the binary only — it does
+# not track the whitakers-words clone HEAD.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/whitakers.yml"
+      - "justfile"
+
+concurrency:
+  group: whitakers
+  cancel-in-progress: false
+
+jobs:
+  ensure:
+    runs-on: [self-hosted, langnet-edge]
+    timeout-minutes: 30
+    steps:
+      - name: Preflight — prove the deploy channel (tailscale ssh to orion)
+        run: |
+          ok=0
+          for i in 1 2 3; do
+            if ssh -o BatchMode=yes -o ConnectTimeout=10 langnet@orion.elf-lizard.ts.net 'echo deploy-channel-ok'; then
+              ok=1
+              break
+            fi
+            echo "preflight attempt $i failed; retrying in 5s"
+            sleep 5
+          done
+          [ "$ok" = 1 ] || { echo "::error::tailscale ssh channel to orion never came up"; exit 1; }
+
+      - name: Ensure the prod binary (justfile recipe on orion)
+        # bash --login because just/devenv live in the langnet user's profile
+        # (same pattern as the orion-services repos stage).
+        run: |
+          ssh -o BatchMode=yes langnet@orion.elf-lizard.ts.net \
+            "bash --login -c 'cd ~/langnet-tools && just whitakers-install'"
