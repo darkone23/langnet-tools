@@ -103,11 +103,12 @@ jobs:
         # hour. This probe bursts the prod listener and counts the parent's
         # zombie children on orion.
         #
-        # Observe mode (always green) until the reaper-retirement PR flips
-        # this step to fatal-on-zombies; that flip is gated on the fix being
-        # verified here first. The parent is identified as the oldest
-        # pgrep-match whose executable is actually perl (the just/devenv
-        # wrappers also match the -f pattern but are not the accept()er).
+        # Fatal mode (HOL-216): the fix (darkone23/diogenes#1) landed on
+        # develop-main and this step verified clean in observe mode before
+        # the reaper retirement, so a nonzero count here means a real leak
+        # regression and must fail the deploy loudly. The zombie_reaper
+        # process left the compose graph in the same change — it was the
+        # hourly SIGTERM-blip workaround, not a fix.
         run: |
           tmp="$(mktemp)"
           ssh -o BatchMode=yes langnet@orion.elf-lizard.ts.net 'bash -s' <<'EOS' > "$tmp" 2>&1
@@ -131,11 +132,10 @@ jobs:
           dz="$(sed -n 's/.*diogenes_zombies=\([0-9]*\).*/\1/p' "$tmp" | tail -1)"
           rm -f "$tmp"
           if [ -z "$dppid" ] || [ "$dppid" = "none" ]; then
-            echo "::warning::diogenes parent not found on orion (down, or pgrep missed it) — probe unreliable (HOL-216)"
-          elif [ "${dz:-unknown}" = "0" ]; then
-            echo "probe: clean — 0 diogenes zombies after a 30-request burst"
-          else
-            echo "probe: ${dz:-unknown} diogenes zombie children after a 30-request burst (leak live — expected until darkone23/diogenes#1 lands)"
+            echo "::error::diogenes parent not found on orion post-deploy — cannot verify the zombie-leak fix (HOL-216)"
+            exit 1
+          elif [ "${dz:-unknown}" != "0" ]; then
+            echo "::error::zombie leak persists after deploy: ${dz:-unknown} diogenes zombie children after a 30-request burst (HOL-216)"
+            exit 1
           fi
-          echo "mode=observe (HOL-216): non-fatal; the reaper-retirement PR flips this step to fatal-on-zombies"
-          exit 0
+          echo "probe: clean — 0 diogenes zombies after a 30-request burst (fix verified, reaper retired)"
