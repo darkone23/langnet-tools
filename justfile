@@ -158,6 +158,12 @@ compose-restart:
 deploy sha:
     #!/usr/bin/env bash
     set -euo pipefail
+    # Self-heal the fetch path (HOL-202): origin must be the public https
+    # URL — the repo is public, so fetches need no key material on the box.
+    # An ssh:// origin makes every deploy depend on a deploy key surviving
+    # on orion (it drifted once and git fetch died with "Permission denied
+    # (publickey)"). Idempotent: a no-op when origin already matches.
+    git remote set-url origin https://github.com/darkone23/langnet-tools
     git fetch origin "{{ sha }}"
     # Drift guard (uncommitted-drift-only, board-corrected semantics):
     # refuse when the worktree or index carries uncommitted changes vs HEAD —
