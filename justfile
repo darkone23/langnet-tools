@@ -195,6 +195,18 @@ deploy sha:
         fi
         d="{{LANGNET_TOOLS_DIR}}/$comp"
         branch=$(git -C "$d" rev-parse --abbrev-ref HEAD)
+        # Self-heal the component fetch path (HOL-202): the clones all track
+        # public repos, so normalize their origin to the public https URL —
+        # an ssh:// origin makes each deploy depend on a deploy key surviving
+        # on orion (langnet-cli's ssh origin died with "Permission denied
+        # (publickey)" right after the harness fetch had been healed). A
+        # trailing ".git" is tolerated on either side; idempotent no-op once
+        # converged.
+        comp_repo="$(git -C "$d" remote get-url origin | sed -E 's#^(ssh://git@|git@)github\.com[:/]darkone23/#https://github.com/darkone23/#; s#\.git$##')"
+        case "$comp_repo" in
+            https://github.com/darkone23/*) git -C "$d" remote set-url origin "$comp_repo" ;;
+            *) echo "REFUSING: $comp origin '$comp_repo' is not a github.com/darkone23 remote — refusing to rewrite blindly" >&2; exit 1 ;;
+        esac
         git -C "$d" fetch origin "$branch"
         if ! git -C "$d" merge --ff-only "origin/$branch" 2>/tmp/ff-err.$comp; then
             if ! git -C "$d" diff --quiet -- ':(exclude)devenv.lock'; then
