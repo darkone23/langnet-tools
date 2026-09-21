@@ -1,7 +1,7 @@
 # Development Guide for langnet-tools
 
 ## Build/Test Commands
-- `just compose up -D` - Start all services (diogenes, langnet, zombie_reaper)
+- `just compose up -D` - Start all services (diogenes, langnet)
 - `just compose list` - List running processes
 - `just compose attach` - Attach to process-compose session
 - `shellcheck .justscripts/*` - Lint all shell scripts

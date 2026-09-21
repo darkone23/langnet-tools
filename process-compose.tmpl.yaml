@@ -52,13 +52,12 @@ processes:
   #     period_seconds: 10
   #     success_threshold: 1
 
-  zombie_reaper:
-    command: "just -f ${LANGNET_TOOLS_DIR}/justfile langnet-dg-reaper"
-    availability:
-      restart: "always"
-    # depends_on:
-    #   langnet_cli:
-    #     condition: process_healthy
+  # zombie_reaper retired (HOL-216): the fork-per-connection zombie leak it
+  # papered over is fixed at the source by darkone23/diogenes#1 (SIGCHLD
+  # reap in the forking server), verified in prod by the deploy workflow's
+  # zombie-leak probe (fatal-on-zombies since this change). The hourly
+  # SIGTERM-blip class it caused is gone with it. Re-add only on a
+  # demonstrated leak regression.
 
   logrotate_process_compose:
     command: "just -f ${LANGNET_TOOLS_DIR}/justfile logrotate-loop"
