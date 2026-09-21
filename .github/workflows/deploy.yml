@@ -94,3 +94,48 @@ jobs:
             sleep 2
           done
           [ "$ok" = 1 ] || { echo "::error::public /api/health never came up through Caddy (60s window exhausted)"; exit 1; }
+
+      - name: Zombie-leak probe — burst diogenes, count its zombie children (HOL-216)
+        # HOL-146/HOL-216: diogenes is fork-per-connection. Before the SIGCHLD
+        # reap fix (darkone23/diogenes#1) every served request leaves a zombie
+        # child in the diogenes parent, and the hourly zombie_reaper process
+        # SIGTERMs that parent to clear them — a diogenes blip roughly every
+        # hour. This probe bursts the prod listener and counts the parent's
+        # zombie children on orion.
+        #
+        # Observe mode (always green) until the reaper-retirement PR flips
+        # this step to fatal-on-zombies; that flip is gated on the fix being
+        # verified here first. The parent is identified as the oldest
+        # pgrep-match whose executable is actually perl (the just/devenv
+        # wrappers also match the -f pattern but are not the accept()er).
+        run: |
+          tmp="$(mktemp)"
+          ssh -o BatchMode=yes langnet@orion.elf-lizard.ts.net 'bash -s' <<'EOS' > "$tmp" 2>&1
+          for i in $(seq 1 30); do curl -fsS --max-time 8 -o /dev/null http://127.0.0.1:8888/ & done
+          wait
+          sleep 3
+          dppid=""
+          for p in $(pgrep -f diogenes-server.pl | sort -n); do
+            if [ "$(ps -o comm= -p "$p" 2>/dev/null)" = "perl" ]; then dppid="$p"; break; fi
+          done
+          if [ -n "$dppid" ]; then
+            dz="$(ps -eo ppid=,stat= | awk -v p="$dppid" '$1 == p && $2 ~ /^Z/' | wc -l)"
+            echo "diogenes_parent_pid=$dppid diogenes_zombies=$dz args=$(ps -o args= -p "$dppid" | head -c 120)"
+          else
+            echo "diogenes_parent_pid=none"
+          fi
+          echo "total_zombies=$(ps -eo stat= | grep -c '^Z' || true)"
+          EOS
+          cat "$tmp"
+          dppid="$(sed -n 's/.*diogenes_parent_pid=\([^ ]*\).*/\1/p' "$tmp" | tail -1)"
+          dz="$(sed -n 's/.*diogenes_zombies=\([0-9]*\).*/\1/p' "$tmp" | tail -1)"
+          rm -f "$tmp"
+          if [ -z "$dppid" ] || [ "$dppid" = "none" ]; then
+            echo "::warning::diogenes parent not found on orion (down, or pgrep missed it) — probe unreliable (HOL-216)"
+          elif [ "${dz:-unknown}" = "0" ]; then
+            echo "probe: clean — 0 diogenes zombies after a 30-request burst"
+          else
+            echo "probe: ${dz:-unknown} diogenes zombie children after a 30-request burst (leak live — expected until darkone23/diogenes#1 lands)"
+          fi
+          echo "mode=observe (HOL-216): non-fatal; the reaper-retirement PR flips this step to fatal-on-zombies"
+          exit 0
