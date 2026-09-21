@@ -28,29 +28,36 @@ processes:
         path: "/"
         port: 8888
 
-  # langnet_cli:
-  #   command: "just -f ${LANGNET_TOOLS_DIR}/justfile langnet-cli-server"
-  #   availability:
-  #     restart: "always"
-  #   environment:
-  #     - "LANGNET_LOG_LEVEL=INFO"
-  #     - "LANGNET_CACHE_ENABLED=true"
-  #   depends_on:
-  #     diogenes:
-  #       condition: process_healthy
-  #     sanskrit_heritage:
-  #       condition: process_healthy
-  #   readiness_probe:
-  #     initial_delay_seconds: 20
-  #     timeout_seconds: 5
-  #     failure_threshold: 5
-  #     http_get:
-  #       host: 127.0.0.1
-  #       scheme: http
-  #       path: "/api/health"
-  #       port: 8000
-  #     period_seconds: 10
-  #     success_threshold: 1
+  # Warm langnet server (HOL-199 S4a / HOL-204): uncommented for the staged
+  # rollout. Provider keys come from the SRE-managed env file referenced
+  # below — never inline secrets in this template (house rule). A missing
+  # env file is non-fatal: the slot boots keyless and populate/auto
+  # translation paths degrade to cache mode (accepted design:
+  # langnet-cli docs/plans/active/infra/warm-cli-server-http-json.md).
+  langnet_cli:
+    command: "just -f ${LANGNET_TOOLS_DIR}/justfile langnet-cli-server"
+    availability:
+      restart: "always"
+    env_file: "${LANGNET_TOOLS_DIR}/../.config/langnet/server.env"
+    environment:
+      - "LANGNET_LOG_LEVEL=INFO"
+      - "LANGNET_CACHE_ENABLED=true"
+    depends_on:
+      diogenes:
+        condition: process_healthy
+      sanskrit_heritage:
+        condition: process_healthy
+    readiness_probe:
+      initial_delay_seconds: 20
+      timeout_seconds: 5
+      failure_threshold: 5
+      http_get:
+        host: 127.0.0.1
+        scheme: http
+        path: "/api/health"
+        port: 8000
+      period_seconds: 10
+      success_threshold: 1
 
   zombie_reaper:
     command: "just -f ${LANGNET_TOOLS_DIR}/justfile langnet-dg-reaper"
