@@ -54,6 +54,21 @@ jobs:
           done
           [ "$ok" = 1 ] || { echo "::error::tailscale ssh channel to orion never came up"; exit 1; }
 
+      - name: Self-heal the prod fetch path (origin -> https)
+        # HOL-202: the prod checkout's origin must be the public https URL.
+        # The repo is public, so fetches need no key material on the box; an
+        # ssh:// origin makes every deploy depend on a deploy key surviving
+        # there, and it drifted before (git fetch died with
+        # "Permission denied (publickey)" before the recipe could run).
+        # Idempotent: a no-op when origin already matches. This step is the
+        # bootstrap — it runs from the merged workflow before the on-box
+        # recipe (which may predate the self-heal) fetches.
+        run: |
+          ssh -o BatchMode=yes langnet@orion.elf-lizard.ts.net \
+            "git -C ~/langnet-tools remote set-url origin https://github.com/darkone23/langnet-tools"
+          ssh -o BatchMode=yes langnet@orion.elf-lizard.ts.net \
+            "git -C ~/langnet-tools remote get-url origin"
+
       - name: Deploy the merged revision (justfile recipe on orion)
         run: |
           ssh -o BatchMode=yes langnet@orion.elf-lizard.ts.net \
