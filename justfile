@@ -223,6 +223,26 @@ deploy sha:
         fi
         echo "component $comp -> $(git -C "$d" rev-parse --short HEAD) ($branch)"
     done
+    # SRE-managed server env bootstrap (HOL-204): the warm-server slot reads
+    # provider keys from ~/.config/langnet/server.env (0600) — the template
+    # references the path, never the contents, so no secret material rides in
+    # code, logs, or the repo. Idempotent bridge: when the legacy webapp env
+    # exists on this host and the managed file does not, seed the managed file
+    # from it (byte copy, no content logged). When neither exists the slot
+    # boots keyless (populate degrades to cache mode) and the managed file
+    # must be provisioned via sops/secretspec BEFORE the LANGNET_SERVER_URL
+    # webapp flip (HOL-204 runbook gate).
+    server_env="$HOME/.config/langnet/server.env"
+    webapp_env="{{LANGNET_TOOLS_DIR}}/langnet-cli/webapp/.env"
+    if [ -f "$server_env" ]; then
+        echo "server.env bootstrap: managed env present ($(wc -c < "$server_env") bytes)"
+    elif [ -f "$webapp_env" ]; then
+        mkdir -p "$(dirname "$server_env")"
+        install -m 600 "$webapp_env" "$server_env"
+        echo "server.env bootstrap: provisioned managed env from webapp/.env ($(wc -c < "$server_env") bytes)"
+    else
+        echo "server.env bootstrap: no webapp/.env here — provision ~/.config/langnet/server.env via sops/secretspec before the LANGNET_SERVER_URL flip"
+    fi
     just compose-restart
     curl -fsS --max-time 10 http://127.0.0.1:43210/api/health >/dev/null
     echo "deploy ok: {{ sha }} (HEAD now $(git rev-parse --short HEAD))"
