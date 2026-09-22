@@ -88,6 +88,13 @@ processes:
     command: "cd ${LANGNET_TOOLS_DIR}/langnet-cli && devenv shell -- bash -c 'cd webapp && just preview-logs'"
     availability:
       restart: "always"
+    # Warm-server transport (HOL-204 runbook step 4): API surfaces POST to the
+    # langnet_cli slot on loopback instead of spawning a CLI subprocess per
+    # request; any server failure (connect/non-200/timeout/malformed) falls
+    # back to the subprocess path per request. Rollback = remove this line and
+    # redeploy. Loopback-only, same host as the slot.
+    environment:
+      - "LANGNET_SERVER_URL=http://127.0.0.1:8000"
     readiness_probe:
       http_get:
         host: 127.0.0.1
