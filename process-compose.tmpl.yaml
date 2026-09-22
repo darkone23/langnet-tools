@@ -47,7 +47,11 @@ processes:
       # The instrumentation itself is env-gated in langnet-cli devenv.nix
       # (uvicorn-run wraps with opentelemetry-instrument when this endpoint
       # is set). Non-secret: stable tailnet DNS name, no keys involved.
+      # OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf pins the OTLP/HTTP
+      # exporter (:4318) — the distro's default protocol is gRPC, whose
+      # exporter package is not installed (RuntimeError at startup).
       - "OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz.elf-lizard.ts.net:4318"
+      - "OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf"
       - "OTEL_SERVICE_NAME=langnet-cli"
       - "OTEL_TRACES_EXPORTER=otlp"
       - "OTEL_METRICS_EXPORTER=otlp"
@@ -95,6 +99,14 @@ processes:
     # redeploy. Loopback-only, same host as the slot.
     environment:
       - "LANGNET_SERVER_URL=http://127.0.0.1:8000"
+      # HOL-229 Phase 2: declared observability identity + OTLP target for
+      # the webapp. Inert until the webapp ships an OTel JS SDK (Phase 3,
+      # HOL-226) — it emits no spans itself, but the warm-server transport
+      # forwards the inbound traceparent so one trace id spans caddy ->
+      # webapp -> langnet_cli.
+      - "OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz.elf-lizard.ts.net:4318"
+      - "OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf"
+      - "OTEL_SERVICE_NAME=webapp"
     readiness_probe:
       http_get:
         host: 127.0.0.1
@@ -102,6 +114,12 @@ processes:
         path: "/api/health"
         port: 43210
 
+  # HOL-229: the front caddy runs the repo-owned webapp Caddyfile (tracing
+  # span + reverse_proxy) via the caddy-proxy recipe; its OTLP env (gRPC on
+  # :4317, service name orion-caddy) comes from the repo file
+  # langnet-cli/webapp/caddy-otel.env, sourced by that recipe — NOT from
+  # this slot: `sudo -n` strips slot env at the escalation, so only the
+  # recipe-internal source survives. Rollback: CADDY_PROXY_MODE=cli.
   langnet_web_caddy:
     command: "cd ${LANGNET_TOOLS_DIR}/langnet-cli && devenv shell -- bash -c 'cd webapp && sudo -n just caddy-proxy'"
     availability:
