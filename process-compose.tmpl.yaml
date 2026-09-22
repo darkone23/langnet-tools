@@ -42,6 +42,17 @@ processes:
     environment:
       - "LANGNET_LOG_LEVEL=INFO"
       - "LANGNET_CACHE_ENABLED=true"
+      # HOL-219 Phase 2: stream traces/metrics to the self-hosted SigNoz on
+      # the truenas signoz VM (tailnet DNS name; loopback + tailnet only).
+      # The instrumentation itself is env-gated in langnet-cli devenv.nix
+      # (uvicorn-run wraps with opentelemetry-instrument when this endpoint
+      # is set). Non-secret: stable tailnet DNS name, no keys involved.
+      - "OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz.elf-lizard.ts.net:4318"
+      - "OTEL_SERVICE_NAME=langnet-cli"
+      - "OTEL_TRACES_EXPORTER=otlp"
+      - "OTEL_METRICS_EXPORTER=otlp"
+      - "OTEL_PROPAGATORS=tracecontext,baggage"
+      - "OTEL_RESOURCE_ATTRIBUTES=service.namespace=langnet,deployment.environment=orion"
     depends_on:
       diogenes:
         condition: process_healthy
