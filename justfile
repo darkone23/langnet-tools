@@ -243,6 +243,24 @@ deploy sha:
     else
         echo "server.env bootstrap: no webapp/.env here — provision ~/.config/langnet/server.env via sops/secretspec before the LANGNET_SERVER_URL flip"
     fi
+    # Webapp bundle freshness (HOL-204): `vite preview` serves webapp/build
+    # verbatim, and nothing else in the deploy path rebuilt it — webapp
+    # changes reached prod only when someone hand-built on orion (the
+    # LANGNET_SERVER_URL flag merged 2026-09-22 was a no-op for exactly this
+    # reason: the served bundle predated the transport code). Rebuild when the
+    # bundle marker is missing or older than any webapp source/config file.
+    # Frozen install: lockfile drift fails the deploy loudly instead of
+    # drifting prod; a build failure fails the deploy (rollback = revert PR).
+    webapp_dir="{{LANGNET_TOOLS_DIR}}/langnet-cli/webapp"
+    bun_bin="$(command -v bun || true)"
+    if [ -z "$bun_bin" ] && [ -x "$HOME/.bun/bin/bun" ]; then bun_bin="$HOME/.bun/bin/bun"; fi
+    if [ ! -f "$webapp_dir/build/index.js" ] || [ -n "$(find "$webapp_dir/src" "$webapp_dir/package.json" "$webapp_dir/svelte.config.js" "$webapp_dir/vite.config.ts" "$webapp_dir/tsconfig.json" "$webapp_dir/static" -newer "$webapp_dir/build/index.js" -print -quit 2>/dev/null)" ]; then
+        [ -n "$bun_bin" ] || { echo "REFUSING: bun not found for webapp bundle build (PATH + ~/.bun/bin both missing)" >&2; exit 1; }
+        echo "webapp bundle stale (or missing) — frozen install + vite build"
+        (cd "$webapp_dir" && "$bun_bin" install --frozen-lockfile && "$bun_bin" --bun run build)
+    else
+        echo "webapp bundle fresh (build/index.js newer than webapp sources)"
+    fi
     just compose-restart
     curl -fsS --max-time 10 http://127.0.0.1:43210/api/health >/dev/null
     echo "deploy ok: {{ sha }} (HEAD now $(git rev-parse --short HEAD))"
