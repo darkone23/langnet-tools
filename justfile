@@ -252,12 +252,18 @@ deploy sha:
     # Frozen install: lockfile drift fails the deploy loudly instead of
     # drifting prod; a build failure fails the deploy (rollback = revert PR).
     webapp_dir="{{LANGNET_TOOLS_DIR}}/langnet-cli/webapp"
-    bun_bin="$(command -v bun || true)"
-    if [ -z "$bun_bin" ] && [ -x "$HOME/.bun/bin/bun" ]; then bun_bin="$HOME/.bun/bin/bun"; fi
     if [ ! -f "$webapp_dir/build/index.js" ] || [ -n "$(find "$webapp_dir/src" "$webapp_dir/package.json" "$webapp_dir/svelte.config.js" "$webapp_dir/vite.config.ts" "$webapp_dir/tsconfig.json" "$webapp_dir/static" -newer "$webapp_dir/build/index.js" -print -quit 2>/dev/null)" ]; then
-        [ -n "$bun_bin" ] || { echo "REFUSING: bun not found for webapp bundle build (PATH + ~/.bun/bin both missing)" >&2; exit 1; }
-        echo "webapp bundle stale (or missing) — frozen install + vite build"
-        (cd "$webapp_dir" && "$bun_bin" install --frozen-lockfile && "$bun_bin" --bun run build)
+        echo "webapp bundle stale (or missing) — frozen install + vite build (devenv-pinned bun)"
+        # Run the build with the langnet-cli devenv's pinned bun, NOT the host
+        # bun: bun >= 1.4 rejects the repo lockfile as "changed" under its
+        # resolver (orion 2026-09-23: bare bun 1.4.2 failed frozen install
+        # while the pinned bun that generates the lock accepts it), and the
+        # slot serves the app with the same pinned bun — producer/consumer
+        # match. PATH insurance: devenv/nix live in the HM profile and the
+        # system nix profile; the non-interactive ssh session may not carry
+        # either.
+        export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
+        (cd "{{LANGNET_TOOLS_DIR}}/langnet-cli" && devenv shell -- bash -c "cd webapp && bun install --frozen-lockfile && bun --bun run build")
     else
         echo "webapp bundle fresh (build/index.js newer than webapp sources)"
     fi
