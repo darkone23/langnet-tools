@@ -188,6 +188,15 @@ deploy sha:
     # eval), so when a moving ff conflicts on the lock, discard ours — the
     # repo pin wins — and retry once, loudly. Any other clobber-conflict is
     # real drift: refuse with the clone's status.
+    # Drift guard (HOL-204): the ff failure path only fires when the merge
+    # would CLOBBER a dirty file — uncommitted edits to files the ff does
+    # not touch (e.g. a hand-edited webapp/package.json surviving a
+    # 39de14d..986ac0a sync) sail through silently and then break the build
+    # steps downstream (bun install --frozen-lockfile refused 2026-09-23
+    # 19:47Z with "lockfile had changes" against prod-local state). After
+    # every sync, refuse on tracked drift, naming the known prod-local
+    # exceptions: the volatile devenv.lock and sanskrit-heritage's
+    # hand-managed webroot/conf/httpd.conf.
     for comp in langnet-cli diogenes sanskrit-heritage; do
         if [ ! -d "{{LANGNET_TOOLS_DIR}}/$comp/.git" ]; then
             echo "REFUSING: $comp clone missing — run 'just clone $comp' on orion first" >&2
@@ -220,6 +229,18 @@ deploy sha:
             git -C "$d" checkout -- devenv.lock
             git -C "$d" merge --ff-only "origin/$branch" \
                 || { echo "REFUSING: $comp cannot fast-forward to origin/$branch even after discarding the volatile lock (diverged?)" >&2; exit 1; }
+        fi
+        case "$comp" in
+            sanskrit-heritage)
+                drift_excludes=":(exclude)devenv.lock :(exclude)webroot/conf/httpd.conf" ;;
+            *)
+                drift_excludes=":(exclude)devenv.lock" ;;
+        esac
+        if ! git -C "$d" diff --quiet HEAD -- $drift_excludes || ! git -C "$d" diff --cached --quiet -- $drift_excludes; then
+            echo "REFUSING: $comp has uncommitted prod drift (worktree/index vs HEAD, beyond the volatile devenv.lock and named prod-local exceptions):" >&2
+            git -C "$d" status --short >&2
+            echo "Land the drift to $branch via PR first, then re-deploy." >&2
+            exit 1
         fi
         echo "component $comp -> $(git -C "$d" rev-parse --short HEAD) ($branch)"
     done
